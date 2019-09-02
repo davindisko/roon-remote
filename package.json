@@ -1,5 +1,5 @@
 {
-  "name": "roon-remote",
+  "name": "roon-remote-davindisko",
   "version": "1.0.0",
   "description": "Remote to control my Roon setup.",
   "main": "app.js",
