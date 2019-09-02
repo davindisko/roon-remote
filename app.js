@@ -1,6 +1,7 @@
 // initialize Roon APIs
 var RoonApi = require("node-roon-api"),
     RoonApiTransport = require("node-roon-api-transport"),
+    RoonApiBrowse    = require('node-roon-api-browse'),
     RoonApiStatus = require("node-roon-api-status"),
     transport,
     zones = [];
@@ -22,6 +23,7 @@ var roon = new RoonApi({
     core_paired: function(core) {
         // connect to transport service
         transport = core.services.RoonApiTransport;
+        browse = core.services.RoonApiBrowse;
         transport.subscribe_zones(function(cmd, data) {
             // on first connection to core, populate zones list and log zone names and ids
             if (cmd == "Subscribed") {
@@ -63,7 +65,7 @@ roon.init_services({
     // provide status of extension
     provided_services: [ svc_status ],
     // require access to transport control
-    required_services: [ RoonApiTransport ]
+    required_services: [ RoonApiBrowse, RoonApiTransport ]
 });
 
 // set status on connection with core (can be viewed in Roon: Settings -> Extensions)
@@ -100,6 +102,65 @@ function control(zone, cmd) {
     }
     console.log("! Command executed");
     return false;
+}
+
+
+function refresh_browse(opts) {
+    opts = Object.assign({
+        hierarchy:          "browse",
+        zone_or_output_id:  v.current_zone_id,
+    }, opts);
+
+    core.services.RoonApiBrowse.browse(opts, (err, r) => {
+        if (err) { console.log(err, r); return; }
+
+        console.log(err, r);
+
+        if (r.action == 'list') {
+            v.$set("list", r.list);
+            v.$set("items", []);
+            var listoffset = r.list.display_offset > 0 ? r.list.display_offset : 0;
+            load_browse(listoffset);
+
+        } else if (r.action == 'message') {
+            alert((r.is_error ? "ERROR: " : "") + r.message);
+
+        } else if (r.action == 'replace_item') {
+            var i = 0;
+            var l = v.items;
+            while (i < l.length) {
+                if (l[i].item_key == opts.item_key) {
+                    l.splice(i, 1, r.item);
+                    break;
+                }
+                i++;
+            }
+            v.$set("items", l);
+
+        } else if (r.action == 'remove_item') {
+            var i = 0;
+            var l = v.items;
+            while (i < l.length) {
+                if (l[i].item_key == opts.item_key) {
+                    l.splice(i, 1);
+                    break;
+                }
+                i++;
+            }
+            v.$set("items", l);
+        }
+    });
+}
+
+function load_browse(listoffset) {
+    core.services.RoonApiBrowse.load({
+        hierarchy:          "browse",
+        offset:             listoffset,
+        set_display_offset: listoffset,
+    }, (err, r) => {
+        v.$set("listoffset", listoffset);
+        v.$set("items", r.items);
+    });
 }
 
 // handle incoming HTTP GET formatted like: http://<host>:<port>/api?command=<cmd>&zone=<zone>
